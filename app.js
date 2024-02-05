@@ -1,3 +1,4 @@
+const dns = require('dns');
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 8081;
@@ -14,15 +15,18 @@ app.use(express.urlencoded());
  */
 const urls = [];
 
-app.post('/api/shorturl', (req, res) => {
-  console.log('body is', req.body);
+app.post('/api/shorturl', async (req, res) => {
   const urlFromBody = req.body.url;
 
   if (!urlFromBody) {
-    return res.json({"error": "Invalid URL"});
+    return res.json({'error': 'Invalid URL'});
   }
 
-  //TODO: check URL
+  try {
+    await lookupURL(urlFromBody);
+  } catch (err) {
+    return res.json({'error': 'Invalid URL'});
+  }
 
   let urlObj = urls.find((url) => url.long === urlFromBody);
   if (!urlObj) {
@@ -41,17 +45,30 @@ app.post('/api/shorturl', (req, res) => {
   return res.json(result);
 });
 
+const lookupURL = async (url) => {
+  const parsedUrl = new URL(url);
+
+  return new Promise((resolve, reject) => {
+    dns.lookup(parsedUrl.protocol ? parsedUrl.host : parsedUrl.pathname, (error, address, family) => {
+      if (error) {
+        reject(error);
+      }
+      resolve(address);
+    });
+  });
+};
+
 app.get('/api/shorturl/:url', (req, res) => {
   const shortUrlFromParams = req.params.url;
 
   if (!Number(shortUrlFromParams) || Number(shortUrlFromParams) < 1) {
-    return res.json({"error": "Wrong format"});
+    return res.json({'error': 'Wrong format'});
   }
 
   const urlObj = urls.find((url) => url.short === Number(shortUrlFromParams));
 
   if (!urlObj) {
-    return res.json({"error": "No short URL found for the given input"});
+    return res.json({'error': 'No short URL found for the given input'});
   }
 
   return res.redirect(urlObj.long);
